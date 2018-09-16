@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Places</title>
+
+    <style type="text/css">
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #places {
+            display: none;
+        }
+
+        .color-picker-wrapper {
+            display: inline-block;
+            background: #ffffff;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+            border-radius: 10px;
+            padding: 10px;
+            float: right;
+        }
+
+        .color-wrapper {
+            position: absolute;
+            right: 25px;
+            top: 25px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .color-wrapper.active .color-picker {
+            display: flex;
+        }
+
+        .color-picker-wrapper .active-color {
+            width: 25px;
+            height: 25px;
+            border-radius: 3px;
+        }
+
+        .color-picker-wrapper:hover {
+            cursor: pointer;
+        }
+
+        .color-wrapper .color-picker {
+            margin-top: 10px;
+            background: #ffffff;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+            padding: 10px;
+            display: none;
+            border-radius: 10px;
+            width: 105px;
+            flex-wrap: wrap;
+        }
+
+        .color {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #4b4b4b;
+            border-radius: 5px;
+            margin-top: 5px;
+        }
+
+        .color:hover {
+            cursor: pointer;
+            opacity: 0.8;
+        }
+
+        .color:not(:nth-child(4)):not(:nth-child(8)) {
+            margin-right: 5px;
+        }
+
+        .color-1 {
+            background-color: #1abc9c;
+        }
+
+        .color-2 {
+            background-color: #2ecc71;
+        }
+
+        .color-3 {
+            background-color: #3498db;
+        }
+
+        .color-4 {
+            background-color: #9b59b6;
+        }
+
+        .color-5 {
+            background-color: #34495e;
+        }
+
+        .color-6 {
+            background-color: #f1c40f;
+        }
+
+        .color-7 {
+            background-color: #e74c3c;
+        }
+
+        .color-8 {
+            background-color: #ffffff;
+        }
+
+    </style>
+</head>
+<body>
+<div class="color-wrapper">
+    <div>
+        <div class="color-picker-wrapper">
+            <div class="active-color color-1">
+
+            </div>
+        </div>
+    </div>
+
+    <div class="color-picker">
+        <div data-color="color-1" class="color color-1"></div>
+        <div data-color="color-2" class="color color-2"></div>
+        <div data-color="color-3" class="color color-3"></div>
+        <div data-color="color-4" class="color color-4"></div>
+        <div data-color="color-5" class="color color-5"></div>
+        <div data-color="color-6" class="color color-6"></div>
+        <div data-color="color-7" class="color color-7"></div>
+        <div data-color="color-8" class="color color-8"></div>
+    </div>
+</div>
+
+<canvas id="places" width="4000" height="4000" style="border:1px solid #000000;"></canvas>
+<canvas id="viewport"></canvas>
+<script src="/socket.io/socket.io.js"></script>
+<script src="http://code.jquery.com/jquery-1.8.3.min.js"></script>
+<script>
+    var socket = io.connect('http://localhost:3000');
+    var c = document.getElementById("places");
+    var ctx = c.getContext("2d");
+    var $target = $('#viewport');
+    var target = $target[0];
+    var targetContext = target.getContext("2d");
+    var $window = $(window);
+    var scrollMax;
+    var scroll = {
+        x : 0,
+        y : 0
+    };
+
+    var hoverRect = {
+        x: 0,
+        y : 0,
+    };
+
+    var colorPicker = false;
+    var activeColor = "color-1";
+    var backup;
+
+    socket.on('connection_success', function (data) {
+        console.log(data);
+        for (var i = 0; i < data.length; i++) {
+            var square = data[i];
+            ctx.fillStyle = square.color;
+            ctx.fillRect(square._id.x, square._id.y, 10, 10);
+        }
+        init();
+    });
+
+    socket.on('square_update', function(data) {
+        ctx.fillStyle = data.color;
+        ctx.fillRect(data._id.x, data._id.y, 10, 10);
+        backup = ctx.getImageData(data._id.x, data._id.y, 10, 10);
+        draw();
+    });
+
+    var moved = false;
+    $target
+        .mousedown(function() {moved = false;})
+        .mousemove(function() {moved = true;})
+        .mouseup(function(event) {
+            if (!moved) {
+                squareClick(event);
+            }
+        });
+
+    target.addEventListener('click', function(evt) {
+
+    }, false);
+
+    function squareClick(evt) {
+        var mousePos = getMousePos(target, evt);
+
+        squareClicked({_id: mousePos, color: activeColor, author: "John"})
+    }
+
+    function getMousePos(c, evt) {
+        var rect = c.getBoundingClientRect();
+
+        return {
+            x: Math.floor((evt.clientX - rect.left + scroll.x) / 10) * 10,
+            y: Math.floor((evt.clientY - rect.top + scroll.y) / 10) * 10
+        };
+    }
+
+    function squareClicked(data) {
+        socket.emit('square_clicked', data);
+    }
+
+    function draw() {
+        target.width = $window.width();
+        target.height = $window.height();
+
+        if(!scrollMax){
+            scrollMax = {
+                x: c.width - target.width,
+                y: c.height - target.height
+            }
+        }
+
+        targetContext.drawImage(c, scroll.x, scroll.y, target.width, target.height, 0, 0, target.width, target.height);
+    }
+
+    function onDragging(event){
+        var delta = {
+            left : (event.clientX - event.data.lastCoord.left),
+            top : (event.clientY - event.data.lastCoord.top)
+        };
+
+        var dx = scroll.x - delta.left;
+        if (dx < -100) {
+            scroll.x = -100;
+        } else if (dx > scrollMax.x + 100) {
+            scroll.x = scrollMax.x + 100;
+        } else {
+            scroll.x = dx;
+        }
+
+        var dy = scroll.y - delta.top;
+        if (dy < -100) {
+            scroll.y = -100;
+        } else if (dy > scrollMax.y + 100) {
+            scroll.y = scrollMax.y + 100;
+        } else {
+            scroll.y = dy;
+        }
+
+        event.data.lastCoord = {
+            left : event.clientX,
+            top : event.clientY
+        };
+
+        draw();
+    }
+
+    function onDragEnd(){
+        $(document).unbind("mousemove", onDragging);
+        $(document).unbind("mouseup", onDragEnd);
+    }
+
+    function onDragStart(event){
+        event.data = {
+            lastCoord:{
+                left : event.clientX,
+                top : event.clientY
+            }
+        };
+        $(document).bind("mouseup", event.data, onDragEnd);
+        $(document).bind("mousemove", event.data, onDragging);
+    }
+
+    function init() {
+        $(".color-picker-wrapper, .color").on("click", function (event) {
+            colorPicker = !colorPicker;
+
+            if (colorPicker === true) {
+                $(".color-wrapper").addClass("active");
+            } else {
+                $(".color-wrapper").removeClass("active");
+            }
+
+            var data = $(event.target).data().color;
+
+            if (data) {
+                var activeColorElem = $(".active-color");
+                activeColor = data;
+                activeColorElem.removeClass();
+                activeColorElem.addClass("active-color " + data);
+            }
+        });
+
+        $target.bind('mousedown', onDragStart);
+        $target.bind('mousemove', function (event) {
+
+            var newHoverRect = getMousePos(c, event);
+            var oldHoverRect;
+
+            if (hoverRect.x === newHoverRect.x && hoverRect.y === newHoverRect.y) {
+                return;
+            }
+
+            oldHoverRect = hoverRect;
+            hoverRect = newHoverRect;
+
+            if (backup) ctx.putImageData(backup, oldHoverRect.x, oldHoverRect.y);
+
+            backup = ctx.getImageData(hoverRect.x, hoverRect.y, 10, 10);
+            ctx.strokeRect(hoverRect.x + 1, hoverRect.y + 1, 8, 8);
+            draw();
+
+        });
+
+        $window.resize(draw);
+        $window.trigger("resize");
+    }
+
+</script>
+</body>
+</html>
