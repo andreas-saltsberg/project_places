@@ -15,7 +15,6 @@ var uri = "mongodb+srv://admin:kappa123@cluster0-wzfud.mongodb.net/test?retryWri
 
 MongoClient.connect(uri, function(err, client) {
     const collection = client.db("Places").collection("places");
-
     collection.find().toArray().then(function (result) {
         matrix = result;
         client.close();
